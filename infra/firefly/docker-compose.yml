@@ -1,0 +1,88 @@
+# Firefly III — household instance (ledgernode)
+#
+# Derived from the vendor's canonical compose file:
+#   https://github.com/firefly-iii/docker/blob/main/docker-compose.yml
+#
+# Deliberate deviations, all recorded in docs/decisions/0001-hosting-and-backup.md:
+#   1. Image tags are pinned; `:latest` is banned in this stack.
+#   2. Named volumes are replaced by bind mounts under ./data so a backup is a file copy (AC12).
+#   3. The published port is bound to the LAN address only, never to the world.
+
+services:
+  app:
+    image: fireflyiii/core:version-6.7.9
+    container_name: ledgernode-app
+    hostname: app
+    stop_signal: SIGINT
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data/upload:/var/www/html/storage/upload
+    ports:
+      - "${BIND_ADDRESS}:${HOST_PORT}:8080"
+    networks:
+      - ledgernode
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    # PostgreSQL rather than the vendor's default MariaDB (owner's choice, ADR-0001).
+    # PostgreSQL 18 keeps its cluster in /var/lib/postgresql, which is why the mount point below is
+    # not the familiar /var/lib/postgresql/data — the vendor documents this explicitly.
+    image: postgres:18-alpine
+    container_name: ledgernode-db
+    hostname: db
+    restart: unless-stopped
+    env_file: .db.env
+    volumes:
+      - ./data/db:/var/lib/postgresql
+    networks:
+      - ledgernode
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # The vendor's cron sidecar: Firefly III needs a periodic HTTP call to /api/v1/cron to run its
+  # scheduled jobs (recurring transactions, exchange rates, reports). STATIC_CRON_TOKEN must be
+  # exactly 32 characters. `$$` is escaped so compose does not interpolate it.
+  cron:
+    image: alpine:3.20
+    container_name: ledgernode-cron
+    restart: unless-stopped
+    env_file: .env
+    init: true
+    command: ["sh", "-c", "apk add tzdata && \
+      (ln -s /usr/share/zoneinfo/$$TZ /etc/localtime || true) && \
+      echo \"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo\" \
+      | crontab - && \
+      exec crond -f -L /dev/stdout"]
+    networks:
+      - ledgernode
+    depends_on:
+      - app
+
+  # The Data Importer is a separate application by design; Firefly III has no CSV ingest of its own.
+  # The web UI is needed once, because the JSON import configuration can only be produced through it.
+  # Afterwards the same JSON file drives a headless import with the `-cli` variant of this image.
+  importer:
+    image: fireflyiii/data-importer:version-2.3.5
+    container_name: ledgernode-importer
+    hostname: importer
+    restart: unless-stopped
+    env_file: .importer.env
+    volumes:
+      - ./import:/import
+    ports:
+      - "${BIND_ADDRESS}:${IMPORTER_PORT}:8080"
+    networks:
+      - ledgernode
+    depends_on:
+      - app
+
+networks:
+  ledgernode:
+    driver: bridge

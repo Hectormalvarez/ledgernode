@@ -1,0 +1,24 @@
+# markdownlint rules, tuned to how these documents are actually written.
+# Reason for each relaxation: this repo uses wide tables and prose paragraphs, not 80-column text.
+default: true
+
+# Prose wraps near 100 columns and table rows cannot wrap at all.
+MD013:
+  line_length: 120
+  tables: false
+  code_blocks: false
+  headings: false
+
+# Identifier lead-ins are used deliberately, e.g. "**E-1 — RESOLVED**" and "**R-12**".
+MD036: false
+
+# Sections legitimately repeat subheadings ("Outcome", "Verified") under different parents.
+MD024:
+  siblings_only: true
+
+# Some fenced blocks are ASCII diagrams with no sensible language tag.
+MD040: false
+
+# Ordered lists restart per section; both "1." and "1)" styles appear.
+MD029:
+  style: ordered

@@ -1,0 +1,24 @@
+# Deployment secrets — generated on the host, never committed.
+infra/firefly/.env
+infra/firefly/.db.env
+infra/firefly/.importer.env
+
+# Runtime data if the stack is ever run from a checkout rather than /srv/ledgernode.
+infra/firefly/data/
+
+# Household values — real names, institutions, balances and figures. Never committed.
+# Copy .household.env.example to .household.env and keep the real values there.
+.household.env
+
+# Real cash-flow plans carry live figures, so they stay local.
+# Only the *.example.md variants are published.
+docs/plans/*.md
+!docs/plans/*.example.md
+
+# Python bytecode from local checks
+__pycache__/
+*.pyc
+
+# Local tooling noise
+*.log
+.DS_Store
